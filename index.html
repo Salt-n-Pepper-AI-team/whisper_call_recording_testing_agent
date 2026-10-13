@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call vs Order Verification</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#14212b;--mut:#62717d;--line:#dbe2e8;--acc:#0f766e;--accbg:#d9f0ed;
+--ok:#15803d;--okbg:#dff3e5;--bad:#c2362b;--badbg:#fbe3e0;--warn:#a15c07;--warnbg:#fdf0d5;--info:#3b5bdb;--infobg:#e3e9fd;--paper:#fffdf6;--paperink:#2b2b2b}
+@media (prefers-color-scheme:dark){:root{--bg:#0e161c;--card:#17222b;--ink:#e8eef2;--mut:#93a3af;--line:#27353f;--acc:#3dc1b4;--accbg:#12332f;--ok:#4ade80;--okbg:#12301d;--bad:#ff7b6e;--badbg:#3a1a17;--warn:#f5b44a;--warnbg:#3a2c0e;--info:#8fa7ff;--infobg:#1c2547}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}
+.sub{color:var(--mut);font-size:14px;margin:0}
+.btns{display:flex;gap:8px;flex-shrink:0;margin-left:auto}
+button{font:inherit;font-weight:600;border-radius:10px;padding:10px 18px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+button.go{background:var(--acc);border-color:var(--acc);color:#fff}
+button.mini{padding:2px 10px;font-size:12px;border-radius:8px}
+button:disabled{opacity:.55;cursor:default}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.stat b{font-size:24px;display:block;line-height:1.1}
+.stat span{font-size:13px;color:var(--mut)}
+.stat.ok b{color:var(--ok)}.stat.bad b{color:var(--bad)}.stat.warn b{color:var(--warn)}.stat.info b{color:var(--info)}
+h2{font-size:15px;margin:22px 0 8px}
+.tbl{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mut);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:0}
+.empty td{color:var(--mut);padding:18px 14px;white-space:normal}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
+.p-wait{background:var(--line);color:var(--mut)}.p-run{background:var(--infobg);color:var(--info)}
+.p-ok{background:var(--okbg);color:var(--ok)}.p-bad{background:var(--badbg);color:var(--bad)}
+.p-warn{background:var(--warnbg);color:var(--warn)}.p-info{background:var(--infobg);color:var(--info)}
+.lane{margin-top:16px}
+.lane h3{font-size:14px;margin:0 0 8px;color:var(--mut);font-weight:600}
+.row{display:grid;grid-template-columns:1fr 1.25fr 1fr 1fr 1fr;gap:10px;align-items:stretch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.card .t{font-size:13px;font-weight:700;color:var(--mut)}
+.card.ghost{border-style:dashed;background:transparent}
+.card.ghost .b{color:var(--mut);font-size:13px}
+.card.in{animation:pop .35s ease-out}
+@keyframes pop{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
+.bars{display:flex;align-items:center;gap:2px;height:30px}
+.bars i{flex:1;background:var(--acc);border-radius:2px;opacity:.75}
+.meta{font-size:13px;color:var(--mut)}
+.err{font-size:13px;color:var(--bad)}
+.urdu{direction:rtl;text-align:right;font-family:"Noto Nastaliq Urdu","Jameel Noori Nastaleeq","Segoe UI",sans-serif;font-size:17px;line-height:1.9}
+.rcpt{background:var(--paper);color:var(--paperink);font-family:"Courier New",monospace;font-size:13px;padding:10px 10px 12px;border-radius:4px}
+.rcpt .h{text-align:center;border-bottom:1px dashed #999;padding-bottom:5px;margin-bottom:5px;font-weight:700}
+.rcpt .l{display:flex;justify-content:space-between;gap:6px}
+.rcpt .l.x{color:#c2362b;font-weight:700}
+.rcpt .l.m{background:#ffe9a8;font-weight:700}
+.verdict{justify-content:center}
+.verdict .big{font-size:18px;font-weight:800}
+.verdict ul{margin:4px 0 0;padding-left:18px;font-size:13px}
+@media (max-width:980px){.row{grid-template-columns:1fr 1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+ <div><h1>Salt'n Pepper: Call vs Order Verification </h1><p class="sub"> Take the order from the recording and match it with the punched order</p></div>
+ <div class="btns"><button id="reset">Reset</button><button id="go" class="go">Simulate Order</button></div>
+</header>
+
+<div class="stats">
+ <div class="stat"><b id="s-total">0</b><span>Calls processed</span></div>
+ <div class="stat ok"><b id="s-match">0</b><span>Match</span></div>
+ <div class="stat bad"><b id="s-mis">0</b><span>Mismatch</span></div>
+ <div class="stat warn"><b id="s-rev">0</b><span>Needs review</span></div>
+ <div class="stat info"><b id="s-auto">0</b><span>Auto-punched</span></div>
+</div>
+
+<h2>Database: call_recordings</h2>
+<div class="tbl"><table>
+ <thead><tr><th>ID</th><th>Phone</th><th>Recording</th><th>order_id</th><th>Status</th></tr></thead>
+ <tbody id="db"></tbody>
+</table></div>
+
+<h2>Database: orders</h2>
+<div class="tbl"><table>
+ <thead><tr><th>ID</th><th>Phone</th><th>Items</th><th>Source</th><th>Status</th></tr></thead>
+ <tbody id="orders"></tbody>
+</table></div>
+
+<div id="lanes"></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const sum=items=>items.map(i=>`${i.qty}x ${i.name}`).join(", ");
+const PILL={MATCH:["p-ok","Match"],MISMATCH:["p-bad","Mismatch"],NEEDS_REVIEW:["p-warn","Needs review"],AUTO_PUNCHED:["p-info","Auto-punched"]};
+const TITLES=["1. Recording","2. Whisper transcript","3. To get an order out of a call","4. Punched order","5. Result"];
+const stat={total:0,match:0,mis:0,rev:0,auto:0};
+let state={calls:[],orders:[]}, runningId=null;
+
+async function api(path,method="GET"){
+ const r=await fetch(path,{method});
+ let j={};try{j=await r.json();}catch(e){}
+ if(!r.ok)throw new Error(j.error||("Server error "+r.status));
+ return j;
+}
+function bars(){return Array.from({length:26},()=>`<i style="height:${20+Math.random()*80}%"></i>`).join("");}
+function setCard(el,html){el.className="card in";el.innerHTML=html;}
+
+function renderTables(){
+ $("#db").innerHTML=state.calls.map(c=>{
+  const p=c.match_status?PILL[c.match_status]:(c.id===runningId?["p-run","Processing"]:["p-wait","Pending"]);
+  return `<tr><td>${c.id}</td><td>${esc(c.customer_phone)}</td><td>${esc(c.recording_path)}</td><td>${c.order_id??"NULL"}</td><td><span class="pill ${p[0]}">${p[1]}</span></td></tr>`;
+ }).join("")||`<tr class="empty"><td colspan="5">Koi call nahi mili.</td></tr>`;
+ $("#orders").innerHTML=state.orders.map(o=>{
+  const needs=o.source==="call_ai"&&o.status==="PENDING_CONFIRMATION";
+  return `<tr><td>${o.id}</td><td>${esc(o.customer_phone)}</td><td>${esc(sum(o.items))}</td><td>${o.source}</td><td>${o.status}${needs?` <button class="mini" data-oid="${o.id}">Confirm</button>`:""}</td></tr>`;
+ }).join("")||`<tr class="empty"><td colspan="5">No any order.</td></tr>`;
+}
+async function load(){state=await api("/api/state");renderTables();}
+$("#orders").onclick=async e=>{
+ const b=e.target.closest("[data-oid]");if(!b)return;
+ b.disabled=true;await api("/api/confirm/"+b.dataset.oid,"POST");await load();
+};
+
+function receipt(title,items,mark){
+ mark=mark||{};
+ const rows=items.map(i=>{
+  let c="l";
+  if(mark.extra&&mark.extra[i.name]!==undefined)c+=" x";
+  else if(mark.qty&&mark.qty[i.name])c+=" m";
+  return `<div class="${c}"><span>${i.qty}x ${esc(i.name)}</span></div>`;
+ }).join("");
+ const miss=Object.entries(mark.missing||{}).map(([n,q])=>`<div class="l x"><span>${q}x ${esc(n)} (punch nahi hua)</span></div>`).join("");
+ return `<div class="rcpt"><div class="h">${esc(title)}</div>${rows}${miss}</div>`;
+}
+
+function makeLane(c){
+ const lane=document.createElement("div");lane.className="lane";
+ lane.innerHTML=`<h3>Call ${c.id}, ${esc(c.customer_phone)}</h3><div class="row">`+
+  TITLES.map(t=>`<div class="card ghost"><div class="t">${t}</div><div class="b">intezar...</div></div>`).join("")+`</div>`;
+ $("#lanes").appendChild(lane);
+ return lane;
+}
+
+function countStatus(s){
+ stat.total++;
+ ({MATCH:()=>stat.match++,MISMATCH:()=>stat.mis++,NEEDS_REVIEW:()=>stat.rev++,AUTO_PUNCHED:()=>stat.auto++})[s]();
+ $("#s-total").textContent=stat.total;$("#s-match").textContent=stat.match;$("#s-mis").textContent=stat.mis;
+ $("#s-rev").textContent=stat.rev;$("#s-auto").textContent=stat.auto;
+}
+function resetStats(){
+ Object.keys(stat).forEach(k=>stat[k]=0);
+ ["total","match","mis","rev","auto"].forEach(k=>$("#s-"+k).textContent=0);
+}
+
+async function processCall(c,lane){
+ const k=lane.querySelectorAll(".card");
+ runningId=c.id;renderTables();
+ try{
+  setCard(k[0],`<div class="t">${TITLES[0]}</div><div class="bars">${bars()}</div><audio controls preload="none" src="/audio/${c.id}" style="width:100%;height:32px"></audio><div class="meta">${esc(c.recording_path)}</div>`);
+  setCard(k[1],`<div class="t">${TITLES[1]}</div><div class="meta">Whisper chal raha hai, CPU par kuch second lagte hain...</div>`);
+  const t=await api("/api/transcribe/"+c.id,"POST");
+  setCard(k[1],`<div class="t">${TITLES[1]}</div><div class="urdu">${esc(t.transcript)}</div><div class="meta">Whisper medium, Urdu</div>`);
+  setCard(k[2],`<div class="t">${TITLES[2]}</div>${receipt("Call se suna gaya",t.items)}${t.uncertain.length?`<div class="meta" style="color:var(--warn)">Unclear: ${esc(t.uncertain.join(", "))}</div>`:""}`);
+  setCard(k[3],`<div class="t">${TITLES[3]}</div><div class="meta">DB mein order dhoondh raha hai...</div>`);
+  const v=await api("/api/verify/"+c.id,"POST");
+  const d=v.details,lines=[];
+  if(v.status==="AUTO_PUNCHED"){
+   setCard(k[3],`<div class="t">${TITLES[3]}</div>${receipt("Auto-punch #"+v.order.id,v.order.items)}<div class="meta">Status: ${esc(v.order.status)}</div>`);
+   lines.push("Is call ka order punch nahi tha, naya order DB mein punch hua","Staff confirm karega, phir kitchen jayega");
+  }else{
+   setCard(k[3],`<div class="t">${TITLES[3]}</div>${receipt("Staff #"+v.order.id,v.order.items,{extra:d.extra,qty:d.qty_diff,missing:d.missing})}`);
+   Object.entries(d.qty_diff).forEach(([n,x])=>lines.push(`${n}: call mein ${x.call}, punch mein ${x.punched}`));
+   Object.keys(d.missing).forEach(n=>lines.push(`${n}: call mein tha, punch nahi hua`));
+   Object.keys(d.extra).forEach(n=>lines.push(`${n}: punch hua, call mein nahi tha`));
+   if(v.status==="MATCH")lines.push("Har item aur quantity same hai");
+   if(v.status==="NEEDS_REVIEW")lines.push("Order milta hai magar call ki ek cheez saaf nahi, insaan dekhe");
+  }
+  const p=PILL[v.status];
+  setCard(k[4],`<div class="t">${TITLES[4]}</div><div class="big"><span class="pill ${p[0]}">${p[1]}</span></div><ul>${lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>`);
+  k[4].classList.add("verdict");
+  countStatus(v.status);
+ }catch(e){
+  setCard(k[4],`<div class="t">${TITLES[4]}</div><div class="err">Error: ${esc(e.message)}</div>`);
+ }
+ runningId=null;await load();
+}
+
+$("#go").onclick=async()=>{
+ $("#go").disabled=true;$("#reset").disabled=true;$("#go").textContent="Simulating...";
+ try{
+  $("#lanes").innerHTML="";resetStats();
+  await api("/api/reset","POST");await load();
+  const lanes=state.calls.map(makeLane);
+  for(let i=0;i<state.calls.length;i++)await processCall(state.calls[i],lanes[i]);
+ }catch(e){alert("Server se connect nahi hua: "+e.message);}
+ $("#go").textContent="Simulate Order";$("#go").disabled=false;$("#reset").disabled=false;
+};
+$("#reset").onclick=async()=>{
+ $("#lanes").innerHTML="";resetStats();
+ await api("/api/reset","POST");await load();
+};
+
+load().catch(e=>{$("#db").innerHTML=`<tr class="empty"><td colspan="5">Server se connect nahi hua. Pehle "python server.py" chalayein.</td></tr>`;});
+</script>
+</body>
+</html>
